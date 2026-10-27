@@ -11,6 +11,74 @@ st.set_page_config(
     layout="wide"
 )
 
+import hashlib
+import hmac
+
+
+def require_login():
+    if st.session_state.get("authenticated", False):
+        st.sidebar.write(
+            f"Signed in as: {st.session_state['username']}"
+        )
+
+        if st.sidebar.button("Log out"):
+            st.session_state.clear()
+            st.rerun()
+
+        return
+
+    st.title("Olist E-Commerce Analytics")
+    st.subheader("Sign in")
+    st.write("Enter your credentials to access the dashboard.")
+
+    with st.form("login_form", clear_on_submit=True):
+        username = st.text_input("User ID")
+        password = st.text_input(
+            "Password",
+            type="password"
+        )
+
+        submitted = st.form_submit_button("Log in")
+
+    if submitted:
+        accounts = st.secrets["login_users"]
+        username = username.strip()
+
+        account_exists = username in accounts
+
+        if account_exists:
+            account = accounts[username]
+        else:
+            account = {
+                "salt": "00" * 16,
+                "password_hash": "00" * 32,
+                "iterations": 600_000
+            }
+
+        candidate_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(account["salt"]),
+            int(account["iterations"])
+        ).hex()
+
+        password_matches = hmac.compare_digest(
+            candidate_hash,
+            account["password_hash"]
+        )
+
+        if account_exists and password_matches:
+            st.session_state["authenticated"] = True
+            st.session_state["username"] = username
+            st.rerun()
+        else:
+            st.error("Invalid user ID or password.")
+
+    st.stop()
+
+
+require_login()
+
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
